@@ -51,6 +51,11 @@ func NewRecordService(
 	}
 }
 
+// Session returns the underlying session.
+func (s *RecordService) Session() *Session {
+	return s.session
+}
+
 // deriveRecordKey derives a record-specific 32-byte key from the decrypted VaultKey.
 func (s *RecordService) deriveRecordKey(vaultKey []byte, recordID string) ([]byte, error) {
 	info := fmt.Sprintf("govault/v1/record/%s", recordID)
