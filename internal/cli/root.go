@@ -120,6 +120,7 @@ func NewRootCommand(appCtx *AppContext) *cobra.Command {
 	rootCmd.AddCommand(newRestoreCmd(appCtx))
 	rootCmd.AddCommand(newInspectCmd(appCtx))
 	rootCmd.AddCommand(newDoctorCmd(appCtx))
+	rootCmd.AddCommand(newTUICmd(appCtx))
 
 	return rootCmd
 }
