@@ -170,3 +170,34 @@ func TestVaultPasswordChangeAndPurge(t *testing.T) {
 		t.Fatalf("Purge failed: %v", err)
 	}
 }
+
+func TestVaultServiceIsInitialized(t *testing.T) {
+	svc, cleanup := setupTestVaultService(t)
+	defer cleanup()
+
+	ctx := context.Background()
+
+	// Initial status should be false
+	init, err := svc.IsInitialized(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error checking IsInitialized: %v", err)
+	}
+	if init {
+		t.Fatal("expected IsInitialized to return false on fresh vault")
+	}
+
+	// Initialize vault
+	if err := svc.Init(ctx, "correct-horse-battery-staple"); err != nil {
+		t.Fatalf("Init failed: %v", err)
+	}
+
+	// Status should now be true
+	init, err = svc.IsInitialized(ctx)
+	if err != nil {
+		t.Fatalf("unexpected error checking IsInitialized: %v", err)
+	}
+	if !init {
+		t.Fatal("expected IsInitialized to return true after Init")
+	}
+}
+

@@ -289,3 +289,107 @@ func TestAppModel_HelpModalToggle(t *testing.T) {
 		t.Fatalf("expected help modal dismissed after Esc")
 	}
 }
+
+func TestAppModel_FirstRunInitializationAndRouting(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "uninitialized_vault.db")
+
+	db, err := sqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open sqlite db: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatalf("failed to migrate db: %v", err)
+	}
+
+	metaRepo := sqlite.NewMetadataRepository(db)
+	tagRepo := sqlite.NewTagRepository(db)
+	recordRepo := sqlite.NewRecordRepository(db, tagRepo)
+	historyRepo := sqlite.NewHistoryRepository(db)
+
+	app := tui.NewApp(db, metaRepo, recordRepo, tagRepo, historyRepo, dbPath, 1*time.Minute)
+	app.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	// 1. Verify initial state is ScreenInit
+	if app.State != tui.ScreenInit {
+		t.Fatalf("expected initial state ScreenInit on fresh db, got %v", app.State)
+	}
+
+	view := app.View()
+	if !strings.Contains(view, "FIRST-TIME SETUP") {
+		t.Fatalf("expected view to render FIRST-TIME SETUP, got: %s", view)
+	}
+
+	// 2. Perform initialization via wizard
+	for _, ch := range "MasterKey12345!" {
+		app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+	}
+	app.Update(tea.KeyMsg{Type: tea.KeyTab})
+	for _, ch := range "MasterKey12345!" {
+		app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{ch}})
+	}
+
+	// Press Enter to trigger initialization
+	_, cmd := app.InitScreen.Update(tea.KeyMsg{Type: tea.KeyEnter})
+	if cmd == nil {
+		t.Fatal("expected async cmd on Enter in ScreenInit")
+	}
+
+	msg := cmd()
+	initSuccessMsg, ok := msg.(screens.InitSuccessMsg)
+	if !ok {
+		t.Fatalf("expected InitSuccessMsg, got %T: %+v", msg, msg)
+	}
+
+	// Dispatch success to app
+	app.Update(initSuccessMsg)
+
+	// 3. Verify state transitioned directly to ScreenDashboard
+	if app.State != tui.ScreenDashboard {
+		t.Fatalf("expected State to be ScreenDashboard after InitSuccessMsg, got %v", app.State)
+	}
+	if app.Session == nil || !app.Session.IsUnlocked() {
+		t.Fatal("expected authenticated active session after first-run init")
+	}
+}
+
+func TestAppModel_ScreenInit_Quit(t *testing.T) {
+	tmpDir := t.TempDir()
+	dbPath := filepath.Join(tmpDir, "quit_vault.db")
+
+	db, err := sqlite.Open(dbPath)
+	if err != nil {
+		t.Fatalf("failed to open sqlite db: %v", err)
+	}
+	defer db.Close()
+
+	ctx := context.Background()
+	if err := db.Migrate(ctx); err != nil {
+		t.Fatalf("failed to migrate db: %v", err)
+	}
+
+	metaRepo := sqlite.NewMetadataRepository(db)
+	tagRepo := sqlite.NewTagRepository(db)
+	recordRepo := sqlite.NewRecordRepository(db, tagRepo)
+	historyRepo := sqlite.NewHistoryRepository(db)
+
+	app := tui.NewApp(db, metaRepo, recordRepo, tagRepo, historyRepo, dbPath, 1*time.Minute)
+	app.Update(tea.WindowSizeMsg{Width: 100, Height: 30})
+
+	if app.State != tui.ScreenInit {
+		t.Fatalf("expected ScreenInit, got %v", app.State)
+	}
+
+	// Press 'q' to quit
+	_, cmd := app.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune{'q'}})
+	if !app.Quitting {
+		t.Fatal("expected app to be quitting after 'q'")
+	}
+	if cmd == nil {
+		t.Fatal("expected tea.Quit cmd after 'q'")
+	}
+}
+

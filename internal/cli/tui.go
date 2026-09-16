@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 	"time"
 
 	tea "github.com/charmbracelet/bubbletea"
@@ -20,8 +21,10 @@ func newTUICmd(appCtx *AppContext) *cobra.Command {
 		Use:   "tui",
 		Short: "Launch interactive Terminal User Interface (TUI)",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if _, err := os.Stat(appCtx.VaultPath); os.IsNotExist(err) {
-				return fmt.Errorf("vault file does not exist at %s (run 'govault init' first)", appCtx.VaultPath)
+			// Ensure directory exists with 0700
+			dir := filepath.Dir(appCtx.VaultPath)
+			if err := os.MkdirAll(dir, 0700); err != nil {
+				return fmt.Errorf("failed to create directory %s: %w", dir, err)
 			}
 
 			db, err := sqlite.Open(appCtx.VaultPath)

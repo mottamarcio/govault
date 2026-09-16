@@ -4,8 +4,10 @@ package tui
 type ScreenState int
 
 const (
-	// ScreenUnlock is the initial master password prompt screen.
-	ScreenUnlock ScreenState = iota
+	// ScreenInit is the first-run onboarding screen when vault is uninitialized.
+	ScreenInit ScreenState = iota
+	// ScreenUnlock is the initial master password prompt screen when vault is initialized.
+	ScreenUnlock
 	// ScreenDashboard is the main vault browsing and management screen.
 	ScreenDashboard
 	// ScreenEditor is the record creation / edit screen.
@@ -17,6 +19,8 @@ const (
 // String returns a human-readable name of the ScreenState.
 func (s ScreenState) String() string {
 	switch s {
+	case ScreenInit:
+		return "ScreenInit"
 	case ScreenUnlock:
 		return "ScreenUnlock"
 	case ScreenDashboard:

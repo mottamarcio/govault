@@ -41,6 +41,18 @@ func (s *VaultService) IsUnlocked() bool {
 	return s.session.IsUnlocked()
 }
 
+// IsInitialized checks if the vault has been initialized by inspecting metadata.
+func (s *VaultService) IsInitialized(ctx context.Context) (bool, error) {
+	_, err := s.metaRepo.Get(ctx)
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, sqlite.ErrVaultNotInitialized) {
+		return false, nil
+	}
+	return false, fmt.Errorf("failed to check vault initialization status: %w", err)
+}
+
 // Init initializes a fresh vault with master password.
 func (s *VaultService) Init(ctx context.Context, masterPassword string) error {
 	if strings.TrimSpace(masterPassword) == "" {

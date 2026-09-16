@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -33,6 +34,7 @@ type AppModel struct {
 	Session       *service.Session
 
 	// Screens
+	InitScreen      *screens.InitModel
 	UnlockScreen    *screens.UnlockModel
 	DashboardScreen *screens.DashboardModel
 	EditorScreen    *screens.EditorModel
@@ -57,11 +59,18 @@ func NewApp(
 	rs := service.NewRecordService(vs.Session(), recordRepo, tagRepo, historyRepo)
 	cs := service.NewClipboardService(nil)
 
+	initScreen := screens.NewInitModel(th, vs, vaultPath)
 	unlockScreen := screens.NewUnlockModel(th, vs, vaultPath)
 	dashboardScreen := screens.NewDashboardModel(th, rs, cs, 80, 24)
 	editorScreen := screens.NewEditorModel(th, rs)
 	statusBar := screens.NewStatusBar(th, vaultPath)
 	autoLock := NewAutoLock(inactivityTimeout)
+
+	initialState := ScreenUnlock
+	initialized, err := vs.IsInitialized(context.Background())
+	if err != nil || !initialized {
+		initialState = ScreenInit
+	}
 
 	return &AppModel{
 		Theme:           th,
@@ -70,11 +79,12 @@ func NewApp(
 		Clipboard:       cs,
 		DB:              db,
 		VaultPath:       vaultPath,
-		State:           ScreenUnlock,
+		State:           initialState,
 		Width:           80,
 		Height:          24,
 		AutoLock:        autoLock,
 		Session:         nil,
+		InitScreen:      initScreen,
 		UnlockScreen:    unlockScreen,
 		DashboardScreen: dashboardScreen,
 		EditorScreen:    editorScreen,
@@ -86,6 +96,7 @@ func NewApp(
 // Init initializes the root Bubble Tea application.
 func (a *AppModel) Init() tea.Cmd {
 	return tea.Batch(
+		a.InitScreen.Init(),
 		a.UnlockScreen.Init(),
 		a.DashboardScreen.Init(),
 		a.EditorScreen.Init(),
@@ -100,6 +111,7 @@ func (a *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case tea.WindowSizeMsg:
 		a.Width = msg.Width
 		a.Height = msg.Height
+		a.InitScreen.SetDimensions(a.Width, a.Height)
 		a.UnlockScreen.SetDimensions(a.Width, a.Height)
 		a.DashboardScreen.SetDimensions(a.Width, a.Height-1)
 		a.EditorScreen.SetDimensions(a.Width, a.Height-1)
@@ -122,7 +134,7 @@ func (a *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 			return a, nil
 
 		case tea.KeyRunes:
-			if msg.String() == "q" && a.State == ScreenUnlock {
+			if msg.String() == "q" && (a.State == ScreenUnlock || a.State == ScreenInit) {
 				a.Quitting = true
 				return a, tea.Quit
 			}
@@ -132,6 +144,21 @@ func (a *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return a, tea.Quit
 			}
 		}
+
+	case screens.InitSuccessMsg:
+		a.Session = msg.Session
+		a.State = ScreenDashboard
+		// Reload dashboard records
+		_ = a.DashboardScreen.ReloadRecords()
+
+		// Start auto-lock timer
+		cmds = append(cmds, a.AutoLock.Start())
+
+		// Update statusbar
+		a.StatusBarScreen.SetLockRemaining(a.AutoLock.Remaining(), true)
+		a.StatusBarScreen.SetRecordCount(len(a.DashboardScreen.AllRecords))
+		a.StatusBarScreen.SetKeyHints([]string{"Tab: Switch", "/: Search", "a: Add", "e: Edit", "d: Delete", "v: Reveal", "c: Copy", "u: User", "Ctrl+L: Lock", "q: Quit", "?: Help"})
+		return a, tea.Batch(cmds...)
 
 	case screens.UnlockSuccessMsg:
 		a.Session = msg.Session
@@ -186,6 +213,15 @@ func (a *AppModel) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	// Route updates based on active screen
 	switch a.State {
+	case ScreenInit:
+		newModel, cmd := a.InitScreen.Update(msg)
+		if im, ok := newModel.(*screens.InitModel); ok {
+			a.InitScreen = im
+		}
+		if cmd != nil {
+			cmds = append(cmds, cmd)
+		}
+
 	case ScreenUnlock:
 		newModel, cmd := a.UnlockScreen.Update(msg)
 		if um, ok := newModel.(*screens.UnlockModel); ok {
@@ -253,6 +289,8 @@ func (a *AppModel) View() string {
 
 	var mainView string
 	switch a.State {
+	case ScreenInit:
+		mainView = a.InitScreen.View()
 	case ScreenUnlock:
 		mainView = a.UnlockScreen.View()
 	case ScreenDashboard:
