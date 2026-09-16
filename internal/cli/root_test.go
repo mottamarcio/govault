@@ -24,7 +24,7 @@ func TestRootCommandVersionAndFlags(t *testing.T) {
 			t.Fatalf("unexpected execution error: %v", err)
 		}
 
-		if !strings.Contains(outBuf.String(), "GoVault v0.1.0") {
+		if !strings.Contains(outBuf.String(), "GoVault v1.0.0") {
 			t.Fatalf("expected version string, got: %s", outBuf.String())
 		}
 	})
@@ -45,7 +45,7 @@ func TestRootCommandVersionAndFlags(t *testing.T) {
 			t.Fatalf("unexpected execution error: %v", err)
 		}
 
-		if !strings.Contains(outBuf.String(), `"version": "0.1.0"`) {
+		if !strings.Contains(outBuf.String(), `"version": "1.0.0"`) {
 			t.Fatalf("expected JSON version, got: %s", outBuf.String())
 		}
 	})

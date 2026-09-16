@@ -11,7 +11,7 @@ import (
 )
 
 const (
-	Version     = "0.1.0"
+	Version     = "1.0.0"
 	CryptoSuite = "argon2id-hkdf-xchacha20poly1305 (v1)"
 )
 
